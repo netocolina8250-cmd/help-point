@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f65a00">
+<title>Help Point | Faça seu pedido</title>
+<style>
+:root{--orange:#f65a00;--orange2:#ff7a00;--yellow:#ffd21a;--cream:#fff7e9;--ink:#3c2116;--muted:#765c50;--white:#fff}
+*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:#fffaf2;color:var(--ink);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+header{background:linear-gradient(120deg,#f34d00,#ff7900);color:#fff;padding:20px 5vw 42px;position:relative;overflow:hidden}
+header:after{content:"";position:absolute;width:320px;height:320px;border:2px solid #ffffff22;border-radius:50%;right:-100px;top:-160px}
+.nav{max-width:1120px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:16px;position:relative;z-index:1}
+.logo{width:190px;max-height:100px;object-fit:contain;filter:drop-shadow(0 4px 0 #a73500)}
+.pill{background:#fff;color:var(--orange);padding:10px 15px;border-radius:30px;text-decoration:none;font-weight:800;font-size:.9rem}
+.hero{max-width:1120px;margin:25px auto 0;display:grid;grid-template-columns:1.1fr .9fr;gap:30px;align-items:center;position:relative;z-index:1}
+.eyebrow{font-weight:900;letter-spacing:2px;text-transform:uppercase;color:#ffe34a;font-size:.82rem}
+h1{font-size:clamp(2.4rem,5.4vw,4.8rem);line-height:.98;margin:12px 0 18px;font-weight:1000;letter-spacing:-2px}
+h1 span{color:var(--yellow);display:block;text-shadow:0 4px 0 #bd3900}
+.hero p{font-size:1.1rem;line-height:1.6;max-width:520px;margin:0 0 22px}
+.cta{display:inline-flex;align-items:center;justify-content:center;background:var(--yellow);color:#632500;padding:14px 20px;border-radius:14px;font-weight:900;text-decoration:none;box-shadow:0 5px 0 #c94400}
+.hero-img{width:100%;height:320px;object-fit:cover;border-radius:28px;border:5px solid #ffffff66;box-shadow:0 18px 45px #8d2b0044}
+main{max-width:1120px;margin:-18px auto 60px;padding:0 22px;position:relative}
+.section-head{display:flex;justify-content:space-between;align-items:end;gap:20px;margin:38px 0 18px}
+h2{font-size:clamp(1.7rem,3vw,2.3rem);margin:0;color:#b83c00;letter-spacing:-.7px}
+.section-head p{margin:6px 0 0;color:var(--muted)}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
+.product{background:#fff;border:1px solid #f2dfca;border-radius:20px;overflow:hidden;box-shadow:0 8px 25px #6d2b0010}
+.product img{width:100%;height:170px;object-fit:cover;display:block}
+.product-body{padding:17px}
+.product h3{margin:0 0 6px;font-size:1.12rem}
+.product p{color:var(--muted);font-size:.9rem;line-height:1.45;margin:0 0 13px;min-height:40px}
+.price{font-weight:950;font-size:1.4rem;color:var(--orange)}
+.product-foot{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.qty{display:flex;align-items:center;gap:9px;background:#fff2e5;border-radius:12px;padding:5px}
+.qty button{width:30px;height:30px;border:0;border-radius:9px;background:var(--orange);color:#fff;font-size:1.15rem;font-weight:900;cursor:pointer}
+.qty output{min-width:20px;text-align:center;font-weight:900}
+.table-wrap{background:#fff;border-radius:20px;border:1px solid #f2dfca;overflow:hidden;box-shadow:0 8px 25px #6d2b0010}
+table{width:100%;border-collapse:collapse}th{background:var(--orange);color:white;text-align:left;padding:15px}td{padding:14px 15px;border-bottom:1px solid #f5e8da}tr:last-child td{border-bottom:0}td:last-child,th:last-child{text-align:right;font-weight:900}
+.note{padding:13px 16px;color:#765c50;font-size:.88rem;background:#fff2e5}
+.order-layout{display:grid;grid-template-columns:1fr  .85fr;gap:20px;align-items:start}
+.panel{background:white;border:1px solid #f2dfca;border-radius:20px;padding:22px;box-shadow:0 8px 25px #6d2b0010}
+label{display:block;font-weight:800;font-size:.9rem;margin:13px 0 7px}
+input,select,textarea{width:100%;border:1px solid #e8d2bd;background:#fffdf9;padding:12px 13px;border-radius:11px;font:inherit;color:var(--ink);outline-color:var(--orange)}
+textarea{min-height:90px;resize:vertical}
+.row-fields{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.cart-empty{color:var(--muted);padding:16px 0}
+.cart-line{display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid #f3e5d8}
+.cart-line small{display:block;color:var(--muted);margin-top:3px}
+.total{display:flex;justify-content:space-between;align-items:center;padding:18px 0;font-size:1.1rem;font-weight:900}
+.total strong{font-size:1.7rem;color:var(--orange)}
+.whatsapp{width:100%;border:0;border-radius:14px;background:#20b95b;color:white;font-size:1rem;font-weight:950;padding:16px;cursor:pointer;box-shadow:0 5px 0 #118b3d}
+.whatsapp:hover{filter:brightness(.96)}.whatsapp:disabled{opacity:.5;cursor:not-allowed}
+footer{background:#3b1c0d;color:#ffe8d3;text-align:center;padding:28px 18px;line-height:1.7}footer strong{color:var(--yellow)}
+@media(max-width:760px){.hero{grid-template-columns:1fr;gap:22px}.hero-img{height:240px}.grid{grid-template-columns:1fr 1fr}.order-layout{grid-template-columns:1fr}.section-head{display:block}.logo{width:150px}.pill{font-size:.8rem;padding:9px 11px}}
+@media(max-width:480px){header{padding:15px 18px 36px}.grid{grid-template-columns:1fr}.product{display:grid;grid-template-columns:115px 1fr}.product img{height:100%;min-height:190px}.product-body{padding:13px}.product p{min-height:0}.row-fields{grid-template-columns:1fr}main{padding:0 15px}.section-head{margin-top:30px}h1{letter-spacing:-1.5px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="nav">
+    <a href="#" aria-label="Help Point - início"><img class="logo" src="https://i.imgur.com/XVqJ7kt.png" alt="Help Point Coxinhas & Cia."></a>
+    <a class="pill" href="#pedido">🛒 Montar meu pedido</a>
+  </div>
+  <div class="hero">
+    <div>
+      <div class="eyebrow">Coxinhas & Cia.</div>
+      <h1>Sua fome <span>pede Help!</span></h1>
+      <p>Coxinhas crocantes, combos para compartilhar e aquele sabor que deixa qualquer momento mais gostoso. Escolha a quantidade e envie seu pedido direto pelo WhatsApp.</p>
+      <a class="cta" href="#cardapio">VER CARDÁPIO&nbsp; ↓</a>
+    </div>
+    <img class="hero-img" src="https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?auto=format&fit=crop&w=1000&q=85" alt="Porção de salgadinhos dourados para compartilhar">
+  </div>
+</header>
+<main>
+  <section id="cardapio">
+    <div class="section-head"><div><h2>Escolha suas delícias 🍗</h2><p>Adicione os itens e confira o resumo do pedido.</p></div></div>
+    <div class="grid">
+      <article class="product">
+        <img src="https://images.unsplash.com/photo-1601050690597-df0568f70950?auto=format&fit=crop&w=700&q=85" alt="Salgadinhos dourados">
+        <div class="product-body"><h3>Combo 5 coxinhas</h3><p>Uma porção para matar a vontade.</p><div class="product-foot"><span class="price">R$ 2,00</span><div class="qty"><button type="button" onclick="changeQty('c5',-1)" aria-label="Diminuir">−</button><output id="q-c5">0</output><button type="button" onclick="changeQty('c5',1)" aria-label="Adicionar">+</button></div></div></div>
+      </article>
+      <article class="product">
+        <img src="https://images.unsplash.com/photo-1626777552726-4a6b54c97e46?auto=format&fit=crop&w=700&q=85" alt="Petiscos e salgados para dividir">
+        <div class="product-body"><h3>Combo 10 coxinhas</h3><p>Ideal para dividir com alguém.</p><div class="product-foot"><span class="price">R$ 4,00</span><div class="qty"><button type="button" onclick="changeQty('c10',-1)" aria-label="Diminuir">−</button><output id="q-c10">0</output><button type="button" onclick="changeQty('c10',1)" aria-label="Adicionar">+</button></div></div></div>
+      </article>
+      <article class="product">
+        <img src="https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?auto=format&fit=crop&w=700&q=85" alt="Comida para compartilhar">
+        <div class="product-body"><h3>Combo 15 coxinhas</h3><p>Mais sabor para curtir em turma.</p><div class="product-foot"><span class="price">R$ 6,00</span><div class="qty"><button type="button" onclick="changeQty('c15',-1)" aria-label="Diminuir">−</button><output id="q-c15">0</output><button type="button" onclick="changeQty('c15',1)" aria-label="Adicionar">+</button></div></div></div>
+      </article>
+      <article class="product">
+        <img src="https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?auto=format&fit=crop&w=700&q=85" alt="Petiscos dourados">
+        <div class="product-body"><h3>Combo 20 coxinhas</h3><p>Para dividir no lanche ou reunião.</p><div class="product-foot"><span class="price">R$ 8,00</span><div class="qty"><button type="button" onclick="changeQty('c20',-1)" aria-label="Diminuir">−</button><output id="q-c20">0</output><button type="button" onclick="changeQty('c20',1)" aria-label="Adicionar">+</button></div></div></div>
+      </article>
+      <article class="product">
+        <img src="https://images.unsplash.com/photo-1573080496219-bb080dd4f877?auto=format&fit=crop&w=700&q=85" alt="Porção para compartilhar">
+        <div class="product-body"><h3>Combo 25 coxinhas</h3><p>O combo para quem quer bastante.</p><div class="product-foot"><span class="price">R$ 10,00</span><div class="qty"><button type="button" onclick="changeQty('c25',-1)" aria-label="Diminuir">−</button><output id="q-c25">0</output><button type="button" onclick="changeQty('c25',1)" aria-label="Adicionar">+</button></div></div></div>
+      </article>
+      <article class="product">
+        <img src="https://images.unsplash.com/photo-1563805042-7684c019e1cb?auto=format&fit=crop&w=700&q=85" alt="Sobremesa gelada" onerror="this.src='https://images.unsplash.com/photo-1563805042-7684c019e1cb?auto=format&fit=crop&w=700&q=85'">
+        <div class="product-body"><h3>Quer incluir algo?</h3><p>Conte no campo de observações se deseja consultar outros itens, como sorvetes e combos especiais.</p><a class="cta" href="#pedido" style="padding:10px 12px;font-size:.85rem">Adicionar observação</a></div>
+      </article>
+    </div>
+  </section>
+  <section>
+    <div class="section-head"><div><h2>Tabela de preços</h2><p>Valores e quantidades conforme a tabela da Help Point.</p></div></div>
+    <div class="table-wrap"><table><thead><tr><th>Quantidade</th><th>Valor</th></tr></thead><tbody><tr><td>5 unidades</td><td>R$ 2,00</td></tr><tr><td>10 unidades</td><td>R$ 4,00</td></tr><tr><td>15 unidades</td><td>R$ 6,00</td></tr><tr><td>20 unidades</td><td>R$ 8,00</td></tr><tr><td>25 unidades</td><td>R$ 10,00</td></tr></tbody></table><div class="note">Os preços acima reproduzem a tabela informada. Confirme disponibilidade e detalhes com a equipe ao enviar o pedido.</div></div>
+  </section>
+  <section id="pedido">
+    <div class="section-head"><div><h2>Seu pedido 🧡</h2><p>Preencha seus dados e envie tudo pronto para o WhatsApp.</p></div></div>
+    <div class="order-layout">
+      <div class="panel">
+        <div class="row-fields"><div><label for="nome">Seu nome *</label><input id="nome" placeholder="Como podemos te chamar?" required></div><div><label for="tipo">Recebimento</label><select id="tipo"><option>Retirada</option><option>Entrega (consultar taxa)</option></select></div></div>
+        <label for="endereco">Endereço (se for entrega)</label><input id="endereco" placeholder="Rua, número, bairro e referência">
+        <label for="pagamento">Forma de pagamento</label><select id="pagamento"><option>Vou combinar pelo WhatsApp</option><option>Pix</option><option>Dinheiro</option><option>Cartão</option></select>
+        <label for="obs">Observações do pedido</label><textarea id="obs" placeholder="Sabor, horário desejado, itens extras ou alguma informação importante..."></textarea>
+      </div>
+      <aside class="panel">
+        <h3 style="margin:0 0 6px">Resumo do pedido</h3><p style="margin:0;color:var(--muted);font-size:.9rem">Seus combos selecionados aparecem aqui.</p>
+        <div id="cart"><div class="cart-empty">Ainda não tem itens no pedido. Use os botões + no cardápio.</div></div>
+        <div class="total"><span>Total estimado</span><strong id="total">R$ 0,00</strong></div>
+        <button class="whatsapp" id="send" type="button" onclick="sendOrder()">Enviar pedido pelo WhatsApp&nbsp; ↗</button>
+        <p style="font-size:.8rem;color:var(--muted);line-height:1.5;margin-bottom:0">O WhatsApp abrirá com a mensagem pronta para você revisar e enviar. A confirmação do pedido será feita pela equipe.</p>
+      </aside>
+    </div>
+  </section>
+</main>
+<footer><strong>HELP POINT — COXINHAS & CIA.</strong><br>Sua fome pede Help!<br>Pedidos direto pelo WhatsApp</footer>
+<script>
+const items={
+ c5:{name:'Combo 5 coxinhas',qty:5,price:2},
+ c10:{name:'Combo 10 coxinhas',qty:10,price:4},
+ c15:{name:'Combo 15 coxinhas',qty:15,price:6},
+ c20:{name:'Combo 20 coxinhas',qty:20,price:8},
+ c25:{name:'Combo 25 coxinhas',qty:25,price:10}
+};
+const counts={c5:0,c10:0,c15:0,c20:0,c25:0};
+const money=n=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'});
+function changeQty(id,delta){counts[id]=Math.max(0,counts[id]+delta);document.getElementById('q-'+id).textContent=counts[id];renderCart()}
+function renderCart(){
+ const cart=document.getElementById('cart');let total=0,html='';
+ Object.keys(items).forEach(id=>{if(counts[id]>0){const it=items[id],sub=it.price*counts[id];total+=sub;html+=`<div class="cart-line"><div><strong>${it.name}</strong><small>${counts[id]} combo(s) · ${it.qty*counts[id]} unidades</small></div><strong>${money(sub)}</strong></div>`}});
+ cart.innerHTML=html||'<div class="cart-empty">Ainda não tem itens no pedido. Use os botões + no cardápio.</div>';
+ document.getElementById('total').textContent=money(total);
+}
+function sendOrder(){
+ const nome=document.getElementById('nome').value.trim();
+ if(!nome){document.getElementById('nome').focus();alert('Informe seu nome para continuar.');return}
+ const selected=Object.keys(items).filter(id=>counts[id]>0);
+ if(!selected.length){alert('Adicione pelo menos um combo ao pedido.');return}
+ const tipo=document.getElementById('tipo').value, endereco=document.getElementById('endereco').value.trim();
+ const pagamento=document.getElementById('pagamento').value, obs=document.getElementById('obs').value.trim();
+ let total=0;const lines=selected.map(id=>{const it=items[id],sub=it.price*counts[id];total+=sub;return `• ${it.name}: ${counts[id]} combo(s) (${it.qty*counts[id]} unidades) — ${money(sub)}`});
+ let msg=`🍗 *NOVO PEDIDO — HELP POINT*\n\n*Nome:* ${nome}\n*Recebimento:* ${tipo}`;
+ if(tipo.startsWith('Entrega'))msg+=`\n*Endereço:* ${endereco||'A combinar pelo WhatsApp'}`;
+ msg+=`\n*Pagamento:* ${pagamento}\n\n*ITENS DO PEDIDO*\n${lines.join('\n')}\n\n*TOTAL ESTIMADO: ${money(total)}*`;
+ if(obs)msg+=`\n\n*Observações:* ${obs}`;
+ msg+='\n\nOlá! Gostaria de confirmar a disponibilidade e finalizar este pedido.';
+ const url='https://wa.me/5591984034863?text='+encodeURIComponent(msg);
+ window.open(url,'_blank','noopener');
+}
+</script>
+</body>
+</html>
