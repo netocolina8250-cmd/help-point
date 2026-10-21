@@ -222,8 +222,17 @@ export default function StorefrontPage() {
               return (
                 <div
                   key={product.id}
-                  className="bg-white rounded-3xl border border-[#f2dfca] overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col justify-between"
+                  className="bg-white rounded-3xl border border-[#f2dfca] overflow-hidden shadow-sm hover:shadow-md transition-all flex flex-col justify-between group"
                 >
+                  {product.image_url && (
+                    <div className="w-full h-44 overflow-hidden bg-amber-50 relative">
+                      <img
+                        src={product.image_url}
+                        alt={product.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+                  )}
                   <div className="p-6">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-black uppercase tracking-wider text-[#f65a00] bg-[#fff2e5] px-2.5 py-1 rounded-lg">

@@ -15,7 +15,10 @@ import {
   Check, 
   X, 
   Sparkles,
-  DollarSign
+  DollarSign,
+  Upload,
+  Loader2,
+  Image as ImageIcon
 } from "lucide-react";
 
 export default function ProdutosPage() {
@@ -46,6 +49,8 @@ export default function ProdutosPage() {
   });
 
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState("");
 
   async function loadData() {
     try {
@@ -126,9 +131,54 @@ export default function ProdutosPage() {
     }
   }
 
+  // Handle Image Upload directly to Supabase Storage ('produtos' bucket)
+  async function handleFileUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      alert("A imagem selecionada ultrapassa o limite de 5MB.");
+      return;
+    }
+
+    try {
+      setUploadingImage(true);
+      setUploadError("");
+
+      const fileExt = file.name.split(".").pop();
+      const cleanFileName = file.name
+        .replace(/\.[^/.]+$/, "")
+        .replace(/[^a-zA-Z0-9]/g, "_")
+        .toLowerCase();
+      const filePath = `${Date.now()}_${cleanFileName}.${fileExt}`;
+
+      const { error: uploadErr } = await supabase.storage
+        .from("produtos")
+        .upload(filePath, file, {
+          cacheControl: "3600",
+          upsert: true,
+        });
+
+      if (uploadErr) throw uploadErr;
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("produtos").getPublicUrl(filePath);
+
+      setProductForm((prev) => ({ ...prev, image_url: publicUrl }));
+    } catch (err: any) {
+      console.error("Erro no upload da imagem:", err);
+      setUploadError("Falha ao subir imagem: " + (err.message || "Tente novamente."));
+    } finally {
+      setUploadingImage(false);
+      e.target.value = "";
+    }
+  }
+
   // Open modal for Create
   function handleOpenCreate() {
     setEditingProduct(null);
+    setUploadError("");
     setProductForm({
       name: "",
       category_id: categories[0]?.id || "",
@@ -147,6 +197,7 @@ export default function ProdutosPage() {
   // Open modal for Edit
   function handleOpenEdit(product: Product) {
     setEditingProduct(product);
+    setUploadError("");
     setProductForm({
       name: product.name,
       category_id: product.category_id || "",
@@ -222,7 +273,7 @@ export default function ProdutosPage() {
     <div>
       <Header
         title="Produtos & Valores"
-        subtitle="Gerencie o cardápio, combos de coxinhas, valores e disponibilidade"
+        subtitle="Gerencie o cardápio, combos de coxinhas, valores e fotos"
         action={
           <button
             onClick={handleOpenCreate}
@@ -280,6 +331,24 @@ export default function ProdutosPage() {
                 } p-5 shadow-sm flex flex-col justify-between transition-all`}
               >
                 <div>
+                  {/* Product Image preview if available */}
+                  {product.image_url ? (
+                    <div className="w-full h-40 rounded-xl overflow-hidden mb-3 bg-amber-50 border border-amber-100 relative group">
+                      <img
+                        src={product.image_url}
+                        alt={product.name}
+                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-full h-24 rounded-xl mb-3 bg-stone-50 border border-dashed border-stone-200 flex items-center justify-center text-stone-400">
+                      <div className="flex items-center gap-1.5 text-xs font-medium">
+                        <ImageIcon className="w-4 h-4 opacity-50" />
+                        <span>Sem foto cadastrada</span>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex items-start justify-between gap-3">
                     <div>
                       <span className="text-[10px] font-black uppercase tracking-wider text-[#f65a00] bg-[#fff2e5] px-2 py-0.5 rounded-md">
@@ -362,10 +431,10 @@ export default function ProdutosPage() {
                             setEditingPriceId(product.id);
                             setNewPriceValue(product.price.toString());
                           }}
-                          title="Alterar preço rapidamente"
-                          className="p-1 text-[#765c50] hover:text-[#f65a00] rounded"
+                          className="text-[10px] text-[#765c50] hover:text-[#f65a00] p-1 underline"
+                          title="Edição rápida de valor"
                         >
-                          <Edit3 className="w-3 h-3" />
+                          Editar
                         </button>
                       </div>
                     )}
@@ -375,17 +444,17 @@ export default function ProdutosPage() {
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => handleOpenEdit(product)}
-                      className="p-2 rounded-xl text-xs font-bold text-[#3c2116] bg-[#fffaf2] hover:bg-[#fff2e5] border border-[#f2dfca] transition-colors"
-                      title="Editar detalhes do produto"
+                      className="p-2 rounded-xl text-[#765c50] hover:text-[#f65a00] hover:bg-[#fff2e5] transition-colors"
+                      title="Editar detalhes e foto"
                     >
-                      <Edit3 className="w-3.5 h-3.5" />
+                      <Edit3 className="w-4 h-4" />
                     </button>
                     <button
                       onClick={() => handleDeleteProduct(product.id, product.name)}
-                      className="p-2 rounded-xl text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors"
+                      className="p-2 rounded-xl text-[#765c50] hover:text-red-600 hover:bg-red-50 transition-colors"
                       title="Excluir produto"
                     >
-                      <Trash2 className="w-3.5 h-3.5" />
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
@@ -395,46 +464,123 @@ export default function ProdutosPage() {
         </div>
       </div>
 
-      {/* Modal: Adicionar / Editar Produto */}
+      {/* Modal Criar / Editar Produto */}
       {showProductModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#f2dfca] relative max-h-[90vh] overflow-y-auto">
-            <button
-              onClick={() => setShowProductModal(false)}
-              className="absolute right-5 top-5 p-1 rounded-lg text-gray-400 hover:text-gray-700"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 rounded-xl bg-[#fff2e5] flex items-center justify-center text-[#f65a00]">
-                <Package className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-black text-lg text-[#3c2116]">
-                  {editingProduct ? "Editar Produto" : "Novo Produto / Combo"}
-                </h3>
-                <p className="text-xs text-[#765c50]">
-                  Configure nome, categoria, preço e detalhes do item
-                </p>
-              </div>
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-[#f2dfca] my-8">
+            <div className="flex items-center justify-between pb-4 border-b border-[#f2dfca]">
+              <h3 className="font-black text-lg text-[#3c2116]">
+                {editingProduct ? "Editar Produto" : "Novo Produto / Combo"}
+              </h3>
+              <button
+                onClick={() => setShowProductModal(false)}
+                className="p-1 rounded-xl text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <form onSubmit={handleSaveProduct} className="space-y-4">
+            <form onSubmit={handleSaveProduct} className="mt-4 space-y-4">
               <div>
                 <label className="block text-xs font-bold text-[#3c2116] mb-1">
-                  Nome do Produto *
+                  Nome do Item / Combo *
                 </label>
                 <input
                   type="text"
                   required
-                  placeholder="Ex: Combo 30 coxinhas, Coxinha Especial..."
+                  placeholder="Ex: Combo 15 Coxinhas"
                   value={productForm.name}
                   onChange={(e) =>
                     setProductForm((prev) => ({ ...prev, name: e.target.value }))
                   }
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-semibold focus:outline-[#f65a00]"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-bold focus:outline-[#f65a00]"
                 />
+              </div>
+
+              {/* Upload de Imagem Direto para o Supabase Storage */}
+              <div>
+                <label className="block text-xs font-bold text-[#3c2116] mb-1.5">
+                  Foto do Produto
+                </label>
+                
+                {productForm.image_url ? (
+                  <div className="relative rounded-2xl border border-[#e8d2bd] overflow-hidden bg-[#fffdf9] p-3 flex items-center gap-4">
+                    <img
+                      src={productForm.image_url}
+                      alt="Preview"
+                      className="w-20 h-20 rounded-xl object-cover border border-[#e8d2bd] bg-white flex-shrink-0"
+                    />
+                    <div className="flex-1 min-w-0 space-y-2">
+                      <p className="text-xs font-bold text-emerald-700 flex items-center gap-1">
+                        <Check className="w-3.5 h-3.5" /> Foto Carregada
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#f65a00] hover:bg-[#e04e00] text-white text-[11px] font-bold rounded-lg transition-colors shadow-sm">
+                          {uploadingImage ? (
+                            <>
+                              <Loader2 className="w-3 h-3 animate-spin" />
+                              <span>Enviando...</span>
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="w-3 h-3" />
+                              <span>Trocar Foto</span>
+                            </>
+                          )}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={uploadingImage}
+                            onChange={handleFileUpload}
+                            className="hidden"
+                          />
+                        </label>
+                        <button
+                          type="button"
+                          onClick={() => setProductForm((prev) => ({ ...prev, image_url: "" }))}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 text-[11px] font-bold rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>Remover</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <label className={`cursor-pointer flex flex-col items-center justify-center p-6 rounded-2xl border-2 border-dashed ${
+                    uploadingImage ? "border-[#f65a00] bg-orange-50/50" : "border-[#e8d2bd] hover:border-[#f65a00] bg-[#fffdf9]"
+                  } transition-all`}>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={uploadingImage}
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                    {uploadingImage ? (
+                      <div className="flex flex-col items-center gap-2 text-[#f65a00]">
+                        <Loader2 className="w-6 h-6 animate-spin" />
+                        <span className="text-xs font-bold">Subindo foto para o Supabase...</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-col items-center gap-1.5 text-center">
+                        <div className="w-10 h-10 rounded-full bg-orange-100 text-[#f65a00] flex items-center justify-center">
+                          <Upload className="w-5 h-5" />
+                        </div>
+                        <p className="text-xs font-bold text-[#3c2116]">
+                          Clique para escolher uma foto do seu dispositivo
+                        </p>
+                        <p className="text-[11px] text-[#765c50]">
+                          PNG, JPG, WEBP até 5 MB
+                        </p>
+                      </div>
+                    )}
+                  </label>
+                )}
+
+                {uploadError && (
+                  <p className="text-xs font-semibold text-red-600 mt-1.5">{uploadError}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -527,21 +673,6 @@ export default function ProdutosPage() {
 
               <div>
                 <label className="block text-xs font-bold text-[#3c2116] mb-1">
-                  URL da Foto (Opcional)
-                </label>
-                <input
-                  type="url"
-                  placeholder="https://images.unsplash.com/..."
-                  value={productForm.image_url}
-                  onChange={(e) =>
-                    setProductForm((prev) => ({ ...prev, image_url: e.target.value }))
-                  }
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-semibold focus:outline-[#f65a00]"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-[#3c2116] mb-1">
                   Descrição do Produto
                 </label>
                 <textarea
@@ -591,7 +722,7 @@ export default function ProdutosPage() {
                 </button>
                 <button
                   type="submit"
-                  disabled={saving}
+                  disabled={saving || uploadingImage}
                   className="px-5 py-2.5 rounded-xl bg-[#f65a00] hover:bg-[#e04e00] text-white text-xs font-bold shadow-md shadow-orange-950/20 disabled:opacity-50"
                 >
                   {saving ? "Salvando..." : editingProduct ? "Salvar Alterações" : "Criar Produto"}
