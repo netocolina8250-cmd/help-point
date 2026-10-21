@@ -100,3 +100,29 @@ export interface StoreSettings {
   is_store_open: boolean;
   updated_at: string;
 }
+
+export type OrderStatus = 'pendente' | 'preparando' | 'saiu_entrega' | 'concluido' | 'cancelado';
+
+export interface OrderItem {
+  id?: string;
+  name: string;
+  price: number;
+  qty: number;
+  units_count?: number;
+}
+
+export interface Order {
+  id: string;
+  customer_name: string;
+  customer_phone?: string | null;
+  order_type: string;
+  delivery_address?: string | null;
+  payment_method: string;
+  notes?: string | null;
+  items: OrderItem[];
+  total_amount: number;
+  status: OrderStatus;
+  created_at: string;
+  updated_at?: string;
+}
+

@@ -36,7 +36,7 @@ export function Sidebar() {
   };
 
   const navItems = [
-    { href: "/admin", label: "Visão Geral", icon: LayoutDashboard },
+    { href: "/admin", label: "Pedidos & Visão Geral", icon: LayoutDashboard },
     { href: "/admin/produtos", label: "Produtos & Preços", icon: Package },
     { href: "/admin/categorias", label: "Categorias", icon: FolderTree },
     { href: "/admin/insumos", label: "Insumos & Compras", icon: Boxes },

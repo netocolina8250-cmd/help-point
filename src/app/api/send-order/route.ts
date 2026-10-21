@@ -157,6 +157,25 @@ export async function POST(request: Request) {
       }
     }
 
+    // 5. Salvar no banco de dados para o Kanban do Admin
+    try {
+      await supabase.from("orders").insert([
+        {
+          customer_name: customerName.trim(),
+          customer_phone: customerPhone ? customerPhone.trim() : null,
+          order_type: orderType || "Retirada no Balcão",
+          delivery_address: address ? address.trim() : null,
+          payment_method: paymentMethod || "Pix",
+          notes: notes ? notes.trim() : null,
+          items: items,
+          total_amount: parseFloat(totalAmount) || 0,
+          status: "pendente",
+        },
+      ]);
+    } catch (orderDbErr) {
+      console.warn("Aviso: tabela orders pode ainda não estar criada:", orderDbErr);
+    }
+
     return NextResponse.json({
       success: true,
       message: "Pedido enviado para a cozinha via WhatsApp com sucesso!",
