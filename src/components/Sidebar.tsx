@@ -1,7 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import { 
   LayoutDashboard, 
   Package, 
@@ -10,11 +12,28 @@ import {
   KeyRound, 
   Store, 
   ExternalLink,
-  ChevronRight
+  ChevronRight,
+  LogOut,
+  UserCheck
 } from "lucide-react";
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user?.email) {
+        setUserEmail(data.user.email);
+      }
+    });
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    router.replace("/admin/login");
+  };
 
   const navItems = [
     { href: "/admin", label: "Visão Geral", icon: LayoutDashboard },
@@ -67,8 +86,20 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer Quick Action */}
-      <div className="p-4 border-t border-amber-900/40">
+      {/* User Info & Footer Quick Action */}
+      <div className="p-4 border-t border-amber-900/40 space-y-2">
+        {userEmail && (
+          <div className="px-3 py-2 rounded-xl bg-amber-950/40 border border-amber-900/30 flex items-center gap-2.5">
+            <UserCheck className="w-4 h-4 text-emerald-400 flex-shrink-0" />
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] text-amber-400 font-bold uppercase tracking-wider">Logado como</p>
+              <p className="text-xs text-amber-100 font-medium truncate" title={userEmail}>
+                {userEmail}
+              </p>
+            </div>
+          </div>
+        )}
+
         <Link
           href="/"
           target="_blank"
@@ -80,6 +111,14 @@ export function Sidebar() {
           </div>
           <ExternalLink className="w-3.5 h-3.5 opacity-60" />
         </Link>
+
+        <button
+          onClick={handleLogout}
+          className="w-full flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl bg-red-950/30 hover:bg-red-900/50 text-xs font-bold text-red-200 border border-red-900/40 transition-colors"
+        >
+          <LogOut className="w-3.5 h-3.5" />
+          <span>Sair da Conta</span>
+        </button>
       </div>
     </aside>
   );
