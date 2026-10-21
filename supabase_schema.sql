@@ -199,3 +199,30 @@ INSERT INTO public.supplies (name, unit_measure, min_stock_alert, current_stock)
 ('Caixa para salgados', 'un', 50.0, 0.0),
 ('Guardanapos', 'pacote', 10.0, 0.0)
 ON CONFLICT DO NOTHING;
+
+-- ==========================================================
+-- 9. GESTÃO DE PEDIDOS & QUADRO KANBAN
+-- ==========================================================
+CREATE TABLE IF NOT EXISTS public.orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    customer_name VARCHAR(150) NOT NULL,
+    customer_phone VARCHAR(50),
+    order_type VARCHAR(50) DEFAULT 'Retirada no Balcão',
+    delivery_address TEXT,
+    payment_method VARCHAR(50) DEFAULT 'Pix',
+    notes TEXT,
+    items JSONB NOT NULL DEFAULT '[]'::jsonb,
+    total_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    status VARCHAR(30) NOT NULL DEFAULT 'pendente', -- 'pendente', 'preparando', 'saiu_entrega', 'concluido', 'cancelado'
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Publico pode criar pedidos" ON public.orders;
+CREATE POLICY "Publico pode criar pedidos" ON public.orders FOR INSERT TO public WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Admin gerencia pedidos" ON public.orders;
+CREATE POLICY "Admin gerencia pedidos" ON public.orders FOR ALL TO authenticated USING (true) WITH CHECK (true);
+
