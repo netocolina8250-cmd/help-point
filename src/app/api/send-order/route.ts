@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
+if (process.env.NODE_ENV === "development") {
+  process.env.NODE_TLS_REJECT_UNAUTHORIZED = "0";
+}
+
 function cleanPhone(phone: string): string {
   let cleaned = phone.replace(/\D/g, "");
   if (cleaned.length === 10 || cleaned.length === 11) {
