@@ -14,7 +14,10 @@ import {
   Phone, 
   ShieldCheck, 
   Lock,
-  ArrowRight
+  ArrowRight,
+  Loader2,
+  CheckCircle2,
+  X
 } from "lucide-react";
 
 export default function StorefrontPage() {
@@ -25,7 +28,8 @@ export default function StorefrontPage() {
   
   // Order form state
   const [customerName, setCustomerName] = useState("");
-  const [orderType, setOrderType] = useState("Retirada");
+  const [customerPhone, setCustomerPhone] = useState("");
+  const [orderType, setOrderType] = useState("Retirada no Balcão");
   const [address, setAddress] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("Pix");
   const [notes, setNotes] = useState("");
@@ -33,46 +37,43 @@ export default function StorefrontPage() {
     process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "5591984034863"
   );
 
+  const [isSendingOrder, setIsSendingOrder] = useState(false);
+  const [orderSuccessModal, setOrderSuccessModal] = useState<{
+    isOpen: boolean;
+    orderData?: any;
+  } | null>(null);
+
   useEffect(() => {
     async function loadData() {
       try {
         setLoading(true);
 
-        // Fetch categories
         const { data: catData } = await supabase
           .from("categories")
           .select("*")
+          .eq("is_active", true)
           .order("order_index", { ascending: true });
 
         if (catData) setCategories(catData);
 
-        // Fetch active products
         const { data: prodData } = await supabase
           .from("products")
           .select("*")
           .eq("is_active", true)
           .order("order_index", { ascending: true });
 
-        if (prodData && prodData.length > 0) {
-          setProducts(prodData);
-        } else {
-          // Fallback initial products if table is empty
-          setProducts([
-            { id: "c5", name: "Combo 5 coxinhas", price: 2.0, units_count: 5, unit_type: "combo", description: "Uma porção crocante para matar a vontade.", is_active: true, is_featured: false, order_index: 1, created_at: "" },
-            { id: "c10", name: "Combo 10 coxinhas", price: 4.0, units_count: 10, unit_type: "combo", description: "Ideal para dividir com alguém especial.", is_active: true, is_featured: false, order_index: 2, created_at: "" },
-            { id: "c15", name: "Combo 15 coxinhas", price: 6.0, units_count: 15, unit_type: "combo", description: "Mais sabor para curtir com a galera.", is_active: true, is_featured: false, order_index: 3, created_at: "" },
-            { id: "c20", name: "Combo 20 coxinhas", price: 8.0, units_count: 20, unit_type: "combo", description: "Perfeito para reuniões e lanches em família.", is_active: true, is_featured: false, order_index: 4, created_at: "" },
-            { id: "c25", name: "Combo 25 coxinhas", price: 10.0, units_count: 25, unit_type: "combo", description: "O combo campeão para quem ama coxinha.", is_active: true, is_featured: true, order_index: 5, created_at: "" },
-          ]);
-        }
+        if (prodData) setProducts(prodData);
 
-        // Fetch store settings
-        const { data: storeData } = await supabase.from("store_settings").select("*").limit(1).single();
-        if (storeData?.whatsapp_number) {
-          setWhatsappNumber(storeData.whatsapp_number);
+        const { data: storeSettings } = await supabase
+          .from("store_settings")
+          .select("*")
+          .maybeSingle();
+
+        if (storeSettings?.whatsapp_number) {
+          setWhatsappNumber(storeSettings.whatsapp_number);
         }
       } catch (err) {
-        console.error(err);
+        console.error("Erro ao carregar cardápio:", err);
       } finally {
         setLoading(false);
       }
@@ -104,17 +105,8 @@ export default function StorefrontPage() {
 
   const totalAmount = cartItems.reduce((acc, item) => acc + item.price * item.qty, 0);
 
-  function handleSendOrder() {
-    if (!customerName.trim()) {
-      alert("Por favor, digite seu nome para identificação do pedido.");
-      return;
-    }
-
-    if (cartItems.length === 0) {
-      alert("Selecione pelo menos um combo para montar seu pedido.");
-      return;
-    }
-
+  // Fallback para envio manual caso o cliente prefira ou a API esteja offline
+  function fallbackToManualWhatsapp() {
     const lines = cartItems.map(
       (item) =>
         `• ${item.name}: ${item.qty} combo(s) (${(item.units_count || 1) * item.qty} un) — ${item.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`
@@ -122,6 +114,9 @@ export default function StorefrontPage() {
 
     let message = `🍗 *NOVO PEDIDO — HELP POINT*\n\n`;
     message += `*Cliente:* ${customerName.trim()}\n`;
+    if (customerPhone.trim()) {
+      message += `*Telefone:* ${customerPhone.trim()}\n`;
+    }
     message += `*Tipo:* ${orderType}\n`;
     if (orderType.includes("Entrega") && address.trim()) {
       message += `*Endereço:* ${address.trim()}\n`;
@@ -139,6 +134,87 @@ export default function StorefrontPage() {
     window.open(targetUrl, "_blank", "noopener,noreferrer");
   }
 
+  async function handleSendOrder() {
+    if (!customerName.trim()) {
+      alert("Por favor, digite seu nome para identificação do pedido.");
+      return;
+    }
+
+    if (!customerPhone.trim()) {
+      alert("Por favor, informe seu WhatsApp para que possamos confirmar o pedido.");
+      return;
+    }
+
+    if (cartItems.length === 0) {
+      alert("Selecione pelo menos um combo para montar seu pedido.");
+      return;
+    }
+
+    try {
+      setIsSendingOrder(true);
+
+      const payload = {
+        customerName: customerName.trim(),
+        customerPhone: customerPhone.trim(),
+        orderType,
+        address: address.trim(),
+        paymentMethod,
+        notes: notes.trim(),
+        items: cartItems.map((i) => ({
+          id: i.id,
+          name: i.name,
+          price: i.price,
+          qty: i.qty,
+          units_count: i.units_count,
+        })),
+        totalAmount,
+      };
+
+      const res = await fetch("/api/send-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        // Pedido disparado com sucesso via API Comversa!
+        setOrderSuccessModal({
+          isOpen: true,
+          orderData: {
+            customerName: customerName.trim(),
+            totalAmount,
+            customerNotified: data.customerNotified,
+          },
+        });
+        // Limpa carrinho
+        setCart({});
+        setNotes("");
+      } else {
+        // Fallback para envio manual no WhatsApp se houver erro
+        const confirmManual = confirm(
+          "Não foi possível transmitir o pedido automaticamente via API (" +
+            (data.error || "instabilidade") +
+            "). Deseja abrir o WhatsApp diretamente para enviar?"
+        );
+        if (confirmManual) {
+          fallbackToManualWhatsapp();
+        }
+      }
+    } catch (err: any) {
+      console.error("Erro no envio:", err);
+      const confirmManual = confirm(
+        "Houve uma oscilação na conexão. Deseja abrir o WhatsApp para enviar o pedido?"
+      );
+      if (confirmManual) {
+        fallbackToManualWhatsapp();
+      }
+    } finally {
+      setIsSendingOrder(false);
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#fffaf2] text-[#3c2116] flex flex-col justify-between selection:bg-[#f65a00] selection:text-white">
       {/* Top Banner / Navbar */}
@@ -149,44 +225,42 @@ export default function StorefrontPage() {
               🍗
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tight leading-none">HELP POINT</h1>
-              <p className="text-xs text-amber-200 font-semibold mt-0.5">Coxinhas & Cia.</p>
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight leading-none text-white drop-shadow-sm">
+                Help Point Coxinhas & Cia.
+              </h1>
+              <p className="text-xs text-amber-100 font-medium mt-1 flex items-center gap-1">
+                <span>Coxinhas fritas na hora, quentinhas e crocantes</span>
+              </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <a
-              href="#pedido"
-              className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white text-[#f65a00] font-black text-xs shadow-md hover:bg-amber-50 transition-all"
-            >
-              <ShoppingBag className="w-3.5 h-3.5" />
-              <span>Ver Pedido ({cartItems.length})</span>
-            </a>
-            <Link
-              href="/admin"
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/20 hover:bg-white/30 text-white text-xs font-bold transition-colors"
-              title="Acesso Administrativo"
-            >
-              <Lock className="w-3 h-3" />
-              <span className="hidden sm:inline">Admin</span>
-            </Link>
+          <div className="hidden sm:flex items-center gap-6 text-xs font-semibold">
+            <div className="flex items-center gap-1.5 bg-black/15 px-3 py-1.5 rounded-full backdrop-blur-sm">
+              <Clock className="w-3.5 h-3.5 text-amber-200" />
+              <span>Seg à Sáb: 16h às 22h</span>
+            </div>
+            <div className="flex items-center gap-1.5 bg-black/15 px-3 py-1.5 rounded-full backdrop-blur-sm">
+              <Phone className="w-3.5 h-3.5 text-amber-200" />
+              <span>(91) 98403-4863</span>
+            </div>
           </div>
         </div>
 
-        {/* Hero inside Header */}
-        <div className="max-w-6xl mx-auto mt-8 mb-4 grid grid-cols-1 md:grid-cols-2 gap-6 items-center relative z-10">
-          <div>
-            <span className="inline-block px-3 py-1 rounded-full bg-amber-400/30 text-amber-200 font-extrabold text-[11px] uppercase tracking-wider mb-2">
-              Coxinhas Crocantes & Quentinhas
+        {/* Hero Card */}
+        <div className="max-w-6xl mx-auto mt-6 pt-4 border-t border-white/20 flex flex-col md:flex-row items-center justify-between gap-4">
+          <div className="space-y-1 text-center md:text-left">
+            <span className="inline-block px-3 py-1 rounded-full bg-yellow-400 text-[#5a2100] font-black text-[11px] uppercase tracking-wider shadow-sm">
+              🔥 Cardápio Online & Pedidos Rápidos
             </span>
-            <h2 className="text-3xl sm:text-5xl font-black leading-tight tracking-tight text-white">
-              Sua fome <span className="text-[#ffd21a]">pede Help!</span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white">
+              Monte seu pedido e receba quentinho
             </h2>
-            <p className="text-sm text-amber-100/90 mt-3 max-w-lg leading-relaxed">
-              Coxinhas douradas, combos para compartilhar e aquele sabor irresistível. Monte seu pedido abaixo e envie direto para o nosso WhatsApp!
+            <p className="text-xs text-amber-100/90 max-w-xl">
+              Selecione a quantidade de coxinhas, informe seus dados e o pedido é transmitido automaticamente para a nossa cozinha!
             </p>
           </div>
-          <div className="hidden md:flex justify-end">
+
+          <div className="flex items-center gap-3">
             <div className="bg-white/10 backdrop-blur-md p-4 rounded-3xl border border-white/20 shadow-2xl flex items-center gap-4">
               <div className="w-14 h-14 rounded-2xl bg-[#ffd21a] flex items-center justify-center text-3xl font-black text-[#632500]">
                 ⚡
@@ -268,22 +342,21 @@ export default function StorefrontPage() {
                       </span>
                     </div>
 
-                    {/* Quantity controls */}
-                    <div className="flex items-center gap-2 bg-[#fff2e5] p-1 rounded-2xl border border-[#f5dbbf]">
+                    {/* Qty Selector */}
+                    <div className="flex items-center gap-2 bg-[#fff7ef] p-1.5 rounded-2xl border border-[#f2dfca]">
                       <button
-                        type="button"
                         onClick={() => updateQty(product.id, -1)}
-                        className="w-8 h-8 rounded-xl bg-white text-[#f65a00] font-black flex items-center justify-center hover:bg-[#ffe3cc] transition-colors shadow-sm"
+                        disabled={qty === 0}
+                        className="w-8 h-8 rounded-xl bg-white text-[#765c50] hover:text-[#f65a00] hover:bg-[#fff2e5] disabled:opacity-30 disabled:hover:bg-white flex items-center justify-center font-black shadow-sm transition-all"
                       >
                         <Minus className="w-3.5 h-3.5" />
                       </button>
-                      <span className="w-6 text-center font-black text-sm text-[#3c2116]">
+                      <span className="w-7 text-center font-black text-sm text-[#3c2116]">
                         {qty}
                       </span>
                       <button
-                        type="button"
                         onClick={() => updateQty(product.id, 1)}
-                        className="w-8 h-8 rounded-xl bg-[#f65a00] text-white font-black flex items-center justify-center hover:bg-[#e04e00] transition-colors shadow-sm"
+                        className="w-8 h-8 rounded-xl bg-[#f65a00] hover:bg-[#e04e00] text-white flex items-center justify-center font-black shadow-md shadow-orange-950/20 transition-all hover:scale-105"
                       >
                         <Plus className="w-3.5 h-3.5" />
                       </button>
@@ -295,22 +368,22 @@ export default function StorefrontPage() {
           </div>
         </section>
 
-        {/* Order Form & Cart Section */}
-        <section id="pedido" className="scroll-mt-8">
+        {/* Checkout Form Section */}
+        <section id="checkout" className="mt-12">
           <div className="mb-6">
             <h3 className="text-2xl font-black text-[#b83c00] tracking-tight">
-              Finalizar Pedido 🧡
+              Finalizar seu Pedido 🛍️
             </h3>
             <p className="text-xs text-[#765c50] mt-1">
-              Preencha os dados abaixo e envie o pedido pronto para o nosso WhatsApp oficial
+              Informe seus dados para a cozinha receber e preparar o seu pedido
             </p>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            {/* Customer Details Form */}
-            <div className="lg:col-span-7 bg-white rounded-3xl border border-[#f2dfca] p-6 sm:p-8 shadow-sm space-y-4">
+            {/* Form Inputs */}
+            <div className="lg:col-span-7 bg-white rounded-3xl border border-[#f2dfca] p-6 sm:p-8 shadow-sm space-y-5">
               <h4 className="font-black text-base text-[#3c2116] border-b border-[#f5e3d0] pb-3">
-                1. Seus Dados de Atendimento
+                1. Seus Dados de Contato & Entrega
               </h4>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -330,23 +403,37 @@ export default function StorefrontPage() {
 
                 <div>
                   <label className="block text-xs font-bold text-[#3c2116] mb-1">
-                    Forma de Recebimento
+                    Seu WhatsApp (com DDD) *
                   </label>
-                  <select
-                    value={orderType}
-                    onChange={(e) => setOrderType(e.target.value)}
-                    className="w-full px-4 py-3 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-bold text-[#3c2116] focus:outline-[#f65a00]"
-                  >
-                    <option value="Retirada no Balcão">Retirada no Balcão</option>
-                    <option value="Entrega (consultar taxa)">Entrega (consultar taxa)</option>
-                  </select>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="(91) 98403-4863"
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-semibold focus:outline-[#f65a00]"
+                  />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#3c2116] mb-1">
+                  Forma de Recebimento
+                </label>
+                <select
+                  value={orderType}
+                  onChange={(e) => setOrderType(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-bold text-[#3c2116] focus:outline-[#f65a00]"
+                >
+                  <option value="Retirada no Balcão">Retirada no Balcão</option>
+                  <option value="Entrega (consultar taxa)">Entrega (consultar taxa)</option>
+                </select>
               </div>
 
               {orderType.includes("Entrega") && (
                 <div>
                   <label className="block text-xs font-bold text-[#3c2116] mb-1">
-                    Endereço de Entrega
+                    Endereço de Entrega *
                   </label>
                   <input
                     type="text"
@@ -367,10 +454,10 @@ export default function StorefrontPage() {
                   onChange={(e) => setPaymentMethod(e.target.value)}
                   className="w-full px-4 py-3 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-bold text-[#3c2116] focus:outline-[#f65a00]"
                 >
-                  <option value="Pix">Pix (Chave informada no WhatsApp)</option>
+                  <option value="Pix">Pix</option>
                   <option value="Dinheiro">Dinheiro</option>
                   <option value="Cartão de Crédito/Débito">Cartão de Crédito/Débito</option>
-                  <option value="A combinar pelo WhatsApp">A combinar pelo WhatsApp</option>
+                  <option value="A combinar">A combinar</option>
                 </select>
               </div>
 
@@ -388,7 +475,7 @@ export default function StorefrontPage() {
               </div>
             </div>
 
-            {/* Cart Summary & WhatsApp CTA */}
+            {/* Cart Summary & Order CTA */}
             <div className="lg:col-span-5 bg-white rounded-3xl border border-[#f2dfca] p-6 sm:p-8 shadow-sm flex flex-col justify-between">
               <div>
                 <h4 className="font-black text-base text-[#3c2116] border-b border-[#f5e3d0] pb-3 flex items-center justify-between">
@@ -441,21 +528,83 @@ export default function StorefrontPage() {
                 <button
                   type="button"
                   onClick={handleSendOrder}
-                  disabled={cartItems.length === 0}
+                  disabled={cartItems.length === 0 || isSendingOrder}
                   className="w-full py-4 rounded-2xl bg-[#20b95b] hover:bg-[#1bb053] disabled:opacity-40 disabled:cursor-not-allowed text-white font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/20 transition-all hover:scale-[1.01]"
                 >
-                  <Send className="w-4 h-4" />
-                  <span>Enviar Pedido pelo WhatsApp</span>
+                  {isSendingOrder ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      <span>Transmitindo para a Cozinha...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      <span>Confirmar e Enviar Pedido</span>
+                    </>
+                  )}
                 </button>
 
                 <p className="text-[11px] text-[#765c50] text-center leading-relaxed">
-                  Ao clicar, o WhatsApp será aberto com o resumo pronto para confirmação pela equipe da Help Point.
+                  O pedido é transmitido automaticamente via API para o WhatsApp da Help Point!
                 </p>
               </div>
             </div>
           </div>
         </section>
       </main>
+
+      {/* Modal de Pedido Confirmado com Sucesso */}
+      {orderSuccessModal?.isOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-emerald-100 text-center animate-in fade-in zoom-in duration-200 relative">
+            <div className="w-16 h-16 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center text-3xl mb-4 shadow-inner">
+              🍗
+            </div>
+            <h3 className="text-xl font-black text-[#3c2116]">
+              Pedido Confirmado com Sucesso!
+            </h3>
+            <p className="text-xs text-[#765c50] mt-1.5 leading-relaxed">
+              Seu pedido já foi transmitido para a cozinha da Help Point via WhatsApp e nossa equipe já está cuidando de tudo!
+            </p>
+
+            <div className="my-5 p-4 rounded-2xl bg-[#fffaf2] border border-[#f2dfca] text-left space-y-1.5 text-xs">
+              <p className="text-stone-600 font-semibold">
+                Cliente: <span className="font-bold text-[#3c2116]">{orderSuccessModal.orderData?.customerName}</span>
+              </p>
+              <p className="text-stone-600 font-semibold">
+                Total: <span className="font-black text-[#f65a00] text-sm">
+                  {Number(orderSuccessModal.orderData?.totalAmount).toLocaleString("pt-BR", {
+                    style: "currency",
+                    currency: "BRL",
+                  })}
+                </span>
+              </p>
+              {orderSuccessModal.orderData?.customerNotified && (
+                <p className="text-[11px] text-emerald-700 font-bold pt-1.5 border-t border-[#f2dfca]/60">
+                  ✓ Enviamos uma confirmação para o seu WhatsApp também!
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <button
+                onClick={() => setOrderSuccessModal(null)}
+                className="w-full py-3.5 rounded-xl bg-[#f65a00] hover:bg-[#e04e00] text-white font-bold text-xs shadow-md shadow-orange-950/20 transition-all"
+              >
+                Fazer Novo Pedido
+              </button>
+              <a
+                href={`https://wa.me/${whatsappNumber}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block w-full py-2.5 rounded-xl text-stone-500 hover:text-[#20b95b] font-bold text-xs transition-colors"
+              >
+                Dúvidas? Conversar no WhatsApp da Loja
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="bg-[#3b1c0d] text-[#ffe8d3] py-8 px-6 mt-16 text-center text-xs">

@@ -6,38 +6,46 @@ import { supabase } from "@/lib/supabase";
 import { Integration } from "@/types/database";
 import { 
   KeyRound, 
-  Plus, 
   Check, 
   Copy, 
   ExternalLink, 
-  ShieldCheck, 
   Eye, 
   EyeOff, 
   Save, 
-  RefreshCw,
+  Send,
+  Loader2,
   MessageSquare,
   CreditCard,
   Database,
-  Globe
+  Radio,
+  Zap,
+  PhoneCall,
+  CheckCircle2,
+  AlertCircle
 } from "lucide-react";
 
 export default function IntegracoesPage() {
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
 
-  // Local state for common integrations
-  const [whatsappPhone, setWhatsappPhone] = useState("5591984034863");
-  const [whatsappMode, setWhatsappMode] = useState<"direct" | "meta_api">("direct");
-  const [metaApiToken, setMetaApiToken] = useState("");
-  const [metaPhoneId, setMetaPhoneId] = useState("");
+  // Comversa Online Configuration
+  const [comversaUrl, setComversaUrl] = useState("https://comversa.online/api/v1/send");
+  const [comversaApiKey, setComversaApiKey] = useState("cvk_k8dYmrjMR7aJqLmvTU49P2vpVPZjpodh");
+  const [storePhone, setStorePhone] = useState("5591984034863");
+  const [notifyCustomer, setNotifyCustomer] = useState(true);
+  const [isComversaActive, setIsComversaActive] = useState(true);
 
+  // Test WhatsApp State
+  const [testPhone, setTestPhone] = useState("5591984034863");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Mercado Pago & Vercel
   const [mpPublicKey, setMpPublicKey] = useState("");
   const [mpAccessToken, setMpAccessToken] = useState("");
   const [mpEnv, setMpEnv] = useState<"sandbox" | "production">("sandbox");
-
   const [vercelDeployHook, setVercelDeployHook] = useState("");
 
   async function loadIntegrations() {
@@ -45,22 +53,25 @@ export default function IntegracoesPage() {
       setLoading(true);
       const { data, error } = await supabase.from("integrations").select("*");
       if (data && data.length > 0) {
-        setIntegrations(data);
-
-        // Populate fields
-        const wpp = data.find((i) => i.service_name === "whatsapp");
-        if (wpp) {
-          setWhatsappPhone(wpp.metadata?.phone || "5591984034863");
-          setWhatsappMode(wpp.metadata?.mode || "direct");
-          setMetaApiToken(wpp.api_key || "");
-          setMetaPhoneId(wpp.metadata?.phone_id || "");
+        // Popula Comversa
+        const comversa = data.find((i) => i.service_name === "comversa");
+        if (comversa) {
+          if (comversa.webhook_url) setComversaUrl(comversa.webhook_url);
+          if (comversa.api_key) setComversaApiKey(comversa.api_key);
+          if (comversa.metadata?.store_phone) setStorePhone(comversa.metadata.store_phone);
+          if (comversa.metadata?.notify_customer !== undefined) {
+            setNotifyCustomer(Boolean(comversa.metadata.notify_customer));
+          }
+          if (comversa.is_active !== undefined) {
+            setIsComversaActive(Boolean(comversa.is_active));
+          }
         }
 
         const mp = data.find((i) => i.service_name === "mercadopago");
         if (mp) {
           setMpPublicKey(mp.api_key || "");
           setMpAccessToken(mp.api_secret || "");
-          setMpEnv(mp.environment || "sandbox");
+          setMpEnv((mp.environment as any) || "sandbox");
         }
 
         const vercel = data.find((i) => i.service_name === "vercel");
@@ -89,32 +100,91 @@ export default function IntegracoesPage() {
     setShowSecrets((prev) => ({ ...prev, [id]: !prev[id] }));
   }
 
-  async function saveWhatsappIntegration() {
+  // Salvar Configuração da API Comversa no Supabase
+  async function saveComversaIntegration() {
     try {
-      setSavingKey("whatsapp");
+      setSavingKey("comversa");
       const payload = {
-        service_name: "whatsapp",
-        display_title: "WhatsApp de Pedidos & API",
+        service_name: "comversa",
+        display_title: "Comversa Online - Disparos de WhatsApp",
+        description: "Disparo automático de pedidos via API HTTP",
         environment: "production",
-        api_key: metaApiToken || null,
+        webhook_url: comversaUrl.trim(),
+        api_key: comversaApiKey.trim(),
         metadata: {
-          phone: whatsappPhone,
-          mode: whatsappMode,
-          phone_id: metaPhoneId,
+          store_phone: storePhone.trim(),
+          notify_customer: notifyCustomer,
         },
-        is_active: true,
+        is_active: isComversaActive,
       };
 
-      const { error } = await supabase
+      // Tenta upsert pelo service_name
+      const { data: existing } = await supabase
         .from("integrations")
-        .upsert(payload, { onConflict: "service_name" });
+        .select("id")
+        .eq("service_name", "comversa")
+        .maybeSingle();
 
-      if (error) throw error;
-      alert("Configurações do WhatsApp salvas com sucesso!");
+      if (existing) {
+        const { error } = await supabase
+          .from("integrations")
+          .update(payload)
+          .eq("id", existing.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("integrations").insert([payload]);
+        if (error) throw error;
+      }
+
+      alert("Configurações da API Comversa salvas com sucesso!");
     } catch (err: any) {
       alert("Erro ao salvar: " + err.message);
     } finally {
       setSavingKey(null);
+    }
+  }
+
+  // Testar envio via API Comversa
+  async function handleTestSend() {
+    if (!testPhone.trim()) {
+      alert("Informe o número para teste.");
+      return;
+    }
+
+    try {
+      setTesting(true);
+      setTestResult(null);
+
+      const res = await fetch("/api/test-whatsapp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          apiUrl: comversaUrl,
+          apiKey: comversaApiKey,
+          phone: testPhone,
+          message: "🍗 *Help Point Coxinhas & Cia.*\n\nTeste de envio via API Comversa realizado com sucesso a partir do Painel Administrativo! ✅",
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setTestResult({
+          success: true,
+          message: "Mensagem enviada com sucesso para o WhatsApp informado!",
+        });
+      } else {
+        setTestResult({
+          success: false,
+          message: data.error || "Falha ao enviar a mensagem.",
+        });
+      }
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: err.message || "Erro ao conectar à API.",
+      });
+    } finally {
+      setTesting(false);
     }
   }
 
@@ -130,36 +200,19 @@ export default function IntegracoesPage() {
         is_active: true,
       };
 
-      const { error } = await supabase
+      const { data: existing } = await supabase
         .from("integrations")
-        .upsert(payload, { onConflict: "service_name" });
+        .select("id")
+        .eq("service_name", "mercadopago")
+        .maybeSingle();
 
-      if (error) throw error;
+      if (existing) {
+        await supabase.from("integrations").update(payload).eq("id", existing.id);
+      } else {
+        await supabase.from("integrations").insert([payload]);
+      }
+
       alert("Configurações do Mercado Pago salvas com sucesso!");
-    } catch (err: any) {
-      alert("Erro ao salvar: " + err.message);
-    } finally {
-      setSavingKey(null);
-    }
-  }
-
-  async function saveVercelIntegration() {
-    try {
-      setSavingKey("vercel");
-      const payload = {
-        service_name: "vercel",
-        display_title: "Vercel Deploy Hook & Hosting",
-        environment: "production",
-        webhook_url: vercelDeployHook || null,
-        is_active: true,
-      };
-
-      const { error } = await supabase
-        .from("integrations")
-        .upsert(payload, { onConflict: "service_name" });
-
-      if (error) throw error;
-      alert("Configuração da Vercel salva!");
     } catch (err: any) {
       alert("Erro ao salvar: " + err.message);
     } finally {
@@ -171,12 +224,219 @@ export default function IntegracoesPage() {
     <div>
       <Header
         title="Chaves de API & Integrações"
-        subtitle="Gerencie credenciais do WhatsApp, Pagamentos, Supabase e Vercel com segurança"
+        subtitle="Gerencie credenciais do Comversa WhatsApp, Pagamentos e Banco de Dados com segurança"
       />
 
       <div className="mt-8 space-y-8">
+        {/* Card Principal: Comversa Online (Disparo Automático via API HTTP) */}
+        <div className="bg-white rounded-3xl border-2 border-[#20b95b]/30 p-6 sm:p-8 shadow-sm relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-50 rounded-full blur-2xl pointer-events-none" />
+
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-[#f5e3d0]">
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-[#20b95b] to-[#2ed573] flex items-center justify-center text-white shadow-lg shadow-emerald-950/20">
+                <Zap className="w-6 h-6" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-black text-lg text-[#3c2116]">
+                    Comversa Online (WhatsApp API HTTP)
+                  </h3>
+                  <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-black uppercase tracking-wider">
+                    Disparo Automático
+                  </span>
+                </div>
+                <p className="text-xs text-[#765c50] mt-0.5">
+                  Envia pedidos diretamente via chamada HTTP POST sem depender do cliente clicar
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <label className="flex items-center gap-2 cursor-pointer text-xs font-bold text-[#3c2116] bg-stone-50 px-3 py-2 rounded-xl border border-stone-200">
+                <input
+                  type="checkbox"
+                  checked={isComversaActive}
+                  onChange={(e) => setIsComversaActive(e.target.checked)}
+                  className="w-4 h-4 text-emerald-600 rounded accent-[#20b95b]"
+                />
+                <span>{isComversaActive ? "Ativo no Sistema" : "Pausado"}</span>
+              </label>
+
+              <button
+                onClick={saveComversaIntegration}
+                disabled={savingKey === "comversa"}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#20b95b] hover:bg-[#1ca651] text-white text-xs font-bold shadow-md shadow-emerald-950/20 transition-all disabled:opacity-50"
+              >
+                {savingKey === "comversa" ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Salvando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="w-4 h-4" />
+                    <span>Salvar Configurações</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* Form Fields */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+            <div>
+              <label className="block text-xs font-bold text-[#3c2116] mb-1.5">
+                URL da API de Envio (Endpoint)
+              </label>
+              <input
+                type="url"
+                value={comversaUrl}
+                onChange={(e) => setComversaUrl(e.target.value)}
+                placeholder="https://comversa.online/api/v1/send"
+                className="w-full px-4 py-2.5 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-mono font-bold text-[#3c2116] focus:outline-[#20b95b]"
+              />
+              <p className="text-[11px] text-[#765c50] mt-1">
+                Altere aqui se mudar para outra instância, porta ou servidor do Comversa.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#3c2116] mb-1.5">
+                Chave de API / Bearer Token
+              </label>
+              <div className="relative">
+                <input
+                  type={showSecrets["comversa_key"] ? "text" : "password"}
+                  value={comversaApiKey}
+                  onChange={(e) => setComversaApiKey(e.target.value)}
+                  placeholder="cvk_..."
+                  className="w-full pl-4 pr-20 py-2.5 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-mono font-bold text-[#3c2116] focus:outline-[#20b95b]"
+                />
+                <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleShowSecret("comversa_key")}
+                    className="p-1.5 text-stone-500 hover:text-stone-800"
+                    title={showSecrets["comversa_key"] ? "Ocultar" : "Mostrar"}
+                  >
+                    {showSecrets["comversa_key"] ? (
+                      <EyeOff className="w-3.5 h-3.5" />
+                    ) : (
+                      <Eye className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(comversaApiKey, "comversa_copy")}
+                    className="p-1.5 text-stone-500 hover:text-stone-800"
+                    title="Copiar Chave"
+                  >
+                    {copiedId === "comversa_copy" ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+                </div>
+              </div>
+              <p className="text-[11px] text-[#765c50] mt-1">
+                Autentica via cabeçalho <code className="bg-stone-100 px-1 py-0.5 rounded">Authorization: Bearer</code>
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-[#3c2116] mb-1.5">
+                Número de WhatsApp da Cozinha / Loja (com DDI e DDD)
+              </label>
+              <input
+                type="text"
+                value={storePhone}
+                onChange={(e) => setStorePhone(e.target.value)}
+                placeholder="Ex: 5591984034863"
+                className="w-full px-4 py-2.5 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-bold text-[#3c2116] focus:outline-[#20b95b]"
+              />
+              <p className="text-[11px] text-[#765c50] mt-1">
+                Para onde todos os novos pedidos finalizados no site serão enviados automaticamente.
+              </p>
+            </div>
+
+            <div className="flex flex-col justify-center">
+              <label className="flex items-center gap-3 cursor-pointer p-3 rounded-xl bg-amber-50/50 border border-amber-200/60">
+                <input
+                  type="checkbox"
+                  checked={notifyCustomer}
+                  onChange={(e) => setNotifyCustomer(e.target.checked)}
+                  className="w-4 h-4 text-emerald-600 rounded accent-[#20b95b]"
+                />
+                <div>
+                  <span className="text-xs font-bold text-[#3c2116] block">
+                    Enviar mensagem de confirmação para o cliente
+                  </span>
+                  <span className="text-[11px] text-[#765c50] block mt-0.5">
+                    Dispara automaticamente mensagem avisando que o pedido foi recebido e está sendo preparado.
+                  </span>
+                </div>
+              </label>
+            </div>
+          </div>
+
+          {/* Teste de Disparo em Tempo Real */}
+          <div className="mt-8 pt-6 border-t border-[#f5e3d0] bg-stone-50/70 -mx-6 -mb-6 sm:-mx-8 sm:-mb-8 p-6 sm:p-8 rounded-b-3xl">
+            <h4 className="text-xs font-black uppercase tracking-wider text-[#3c2116] mb-3 flex items-center gap-2">
+              <PhoneCall className="w-4 h-4 text-[#20b95b]" />
+              <span>Testar Disparo de Mensagem em Tempo Real</span>
+            </h4>
+
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <input
+                type="text"
+                value={testPhone}
+                onChange={(e) => setTestPhone(e.target.value)}
+                placeholder="Número para testar (ex: 5591984034863)"
+                className="flex-1 w-full px-4 py-2.5 rounded-xl border border-stone-300 bg-white text-xs font-bold text-[#3c2116] focus:outline-[#20b95b]"
+              />
+              <button
+                type="button"
+                onClick={handleTestSend}
+                disabled={testing}
+                className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-[#3c2116] hover:bg-[#2b170f] text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-md disabled:opacity-50"
+              >
+                {testing ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Disparando...</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-3.5 h-3.5 text-[#20b95b]" />
+                    <span>Enviar Teste Agora</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {testResult && (
+              <div
+                className={`mt-4 p-3.5 rounded-xl text-xs flex items-center gap-2.5 ${
+                  testResult.success
+                    ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
+                    : "bg-red-50 border border-red-200 text-red-700"
+                }`}
+              >
+                {testResult.success ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                ) : (
+                  <AlertCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                )}
+                <span className="font-semibold">{testResult.message}</span>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Supabase Connection Overview Card */}
-        <div className="bg-white rounded-2xl border border-[#f2dfca] p-6 shadow-sm">
+        <div className="bg-white rounded-3xl border border-[#f2dfca] p-6 shadow-sm">
           <div className="flex items-center justify-between pb-4 border-b border-[#f5e3d0]">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700">
@@ -184,10 +444,10 @@ export default function IntegracoesPage() {
               </div>
               <div>
                 <h3 className="font-black text-base text-[#3c2116]">
-                  Banco de Dados Supabase (Ativo)
+                  Banco de Dados & Storage (Supabase)
                 </h3>
                 <p className="text-xs text-[#765c50]">
-                  Conexão com PostgreSQL, Autenticação e Storage
+                  Conexão ativa com PostgreSQL, Auth e Buckets de Imagens
                 </p>
               </div>
             </div>
@@ -267,125 +527,8 @@ export default function IntegracoesPage() {
           </div>
         </div>
 
-        {/* WhatsApp Integration Card */}
-        <div className="bg-white rounded-2xl border border-[#f2dfca] p-6 shadow-sm">
-          <div className="flex items-center justify-between pb-4 border-b border-[#f5e3d0]">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center text-emerald-700">
-                <MessageSquare className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-black text-base text-[#3c2116]">
-                  WhatsApp de Atendimento & Pedidos
-                </h3>
-                <p className="text-xs text-[#765c50]">
-                  Configure para onde vão os pedidos dos clientes (Link direto ou Meta API)
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={saveWhatsappIntegration}
-              disabled={savingKey === "whatsapp"}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#20b95b] hover:bg-[#1ca651] text-white text-xs font-bold shadow-md shadow-emerald-950/20 disabled:opacity-50"
-            >
-              <Save className="w-3.5 h-3.5" />
-              {savingKey === "whatsapp" ? "Salvando..." : "Salvar WhatsApp"}
-            </button>
-          </div>
-
-          <div className="mt-5 space-y-4 max-w-2xl">
-            <div>
-              <label className="block text-xs font-bold text-[#3c2116] mb-1">
-                Número do WhatsApp com DDD (sem espaços ou traços) *
-              </label>
-              <input
-                type="text"
-                value={whatsappPhone}
-                onChange={(e) => setWhatsappPhone(e.target.value)}
-                placeholder="5591984034863"
-                className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-bold text-[#3c2116] focus:outline-[#f65a00]"
-              />
-              <span className="text-[11px] text-[#765c50] mt-1 block">
-                Formato internacional: 55 + DDD + Telefone (ex: 5591984034863)
-              </span>
-            </div>
-
-            <div className="pt-2">
-              <label className="block text-xs font-bold text-[#3c2116] mb-2">
-                Método de Envio dos Pedidos
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="flex items-start gap-2.5 p-3 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] cursor-pointer">
-                  <input
-                    type="radio"
-                    name="wpp_mode"
-                    checked={whatsappMode === "direct"}
-                    onChange={() => setWhatsappMode("direct")}
-                    className="mt-0.5 accent-[#20b95b]"
-                  />
-                  <div>
-                    <span className="font-bold text-xs text-[#3c2116] block">
-                      Link Direto wa.me (Recomendado)
-                    </span>
-                    <span className="text-[11px] text-[#765c50]">
-                      Abre o WhatsApp do cliente com mensagem pronta para envio. 100% gratuito e sem custos de API.
-                    </span>
-                  </div>
-                </label>
-
-                <label className="flex items-start gap-2.5 p-3 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] cursor-pointer">
-                  <input
-                    type="radio"
-                    name="wpp_mode"
-                    checked={whatsappMode === "meta_api"}
-                    onChange={() => setWhatsappMode("meta_api")}
-                    className="mt-0.5 accent-[#20b95b]"
-                  />
-                  <div>
-                    <span className="font-bold text-xs text-[#3c2116] block">
-                      Meta WhatsApp Cloud API
-                    </span>
-                    <span className="text-[11px] text-[#765c50]">
-                      Envio de mensagens automatizadas pelo servidor com templates aprovados pela Meta.
-                    </span>
-                  </div>
-                </label>
-              </div>
-            </div>
-
-            {whatsappMode === "meta_api" && (
-              <div className="space-y-3 p-4 rounded-xl bg-[#fffaf2] border border-[#f2dfca]">
-                <div>
-                  <label className="block text-xs font-bold text-[#3c2116] mb-1">
-                    Meta Permanent Access Token
-                  </label>
-                  <input
-                    type="password"
-                    value={metaApiToken}
-                    onChange={(e) => setMetaApiToken(e.target.value)}
-                    placeholder="EAA..."
-                    className="w-full px-3 py-2 text-xs rounded-lg border border-[#e8d2bd] font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-[#3c2116] mb-1">
-                    Phone Number ID
-                  </label>
-                  <input
-                    type="text"
-                    value={metaPhoneId}
-                    onChange={(e) => setMetaPhoneId(e.target.value)}
-                    placeholder="10928374829384"
-                    className="w-full px-3 py-2 text-xs rounded-lg border border-[#e8d2bd] font-mono"
-                  />
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Mercado Pago / Pix Gateway Card */}
-        <div className="bg-white rounded-2xl border border-[#f2dfca] p-6 shadow-sm">
+        {/* Mercado Pago Gateway Card */}
+        <div className="bg-white rounded-3xl border border-[#f2dfca] p-6 shadow-sm">
           <div className="flex items-center justify-between pb-4 border-b border-[#f5e3d0]">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-sky-100 flex items-center justify-center text-sky-700">
@@ -393,108 +536,47 @@ export default function IntegracoesPage() {
               </div>
               <div>
                 <h3 className="font-black text-base text-[#3c2116]">
-                  Gateway de Pagamento Pix / Cartão (Mercado Pago)
+                  Mercado Pago (Pix & Cartões)
                 </h3>
                 <p className="text-xs text-[#765c50]">
-                  Gere cobranças via Pix com baixa automática de pedidos
+                  Geração de QR Code Pix e cobrança automática
                 </p>
               </div>
             </div>
             <button
               onClick={saveMercadoPagoIntegration}
               disabled={savingKey === "mercadopago"}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#009ee3] hover:bg-[#008ecb] text-white text-xs font-bold shadow-md shadow-sky-950/20 disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold shadow-md disabled:opacity-50"
             >
               <Save className="w-3.5 h-3.5" />
               {savingKey === "mercadopago" ? "Salvando..." : "Salvar Mercado Pago"}
             </button>
           </div>
 
-          <div className="mt-5 space-y-4 max-w-2xl">
-            <div className="flex items-center gap-3">
-              <span className="text-xs font-bold text-[#3c2116]">Ambiente:</span>
-              <button
-                type="button"
-                onClick={() => setMpEnv(mpEnv === "sandbox" ? "production" : "sandbox")}
-                className={`px-3 py-1 rounded-full text-xs font-bold transition-colors ${
-                  mpEnv === "production"
-                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                    : "bg-amber-100 text-amber-800 border border-amber-300"
-                }`}
-              >
-                {mpEnv === "production" ? "Produção (Ao Vivo)" : "Sandbox (Ambiente de Testes)"}
-              </button>
-            </div>
-
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-5">
             <div>
               <label className="block text-xs font-bold text-[#3c2116] mb-1">
-                Public Key (Chave Pública)
+                Public Key
               </label>
               <input
                 type="text"
+                placeholder="APP_USR-..."
                 value={mpPublicKey}
                 onChange={(e) => setMpPublicKey(e.target.value)}
-                placeholder="APP_USR-..."
-                className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-mono focus:outline-[#009ee3]"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-mono font-bold focus:outline-sky-600"
               />
             </div>
-
             <div>
               <label className="block text-xs font-bold text-[#3c2116] mb-1">
-                Access Token (Chave Secreta)
+                Access Token
               </label>
               <input
                 type="password"
+                placeholder="APP_USR-..."
                 value={mpAccessToken}
                 onChange={(e) => setMpAccessToken(e.target.value)}
-                placeholder="APP_USR-..."
-                className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-mono focus:outline-[#009ee3]"
+                className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-mono font-bold focus:outline-sky-600"
               />
-            </div>
-          </div>
-        </div>
-
-        {/* Vercel & GitHub Deploy Card */}
-        <div className="bg-white rounded-2xl border border-[#f2dfca] p-6 shadow-sm">
-          <div className="flex items-center justify-between pb-4 border-b border-[#f5e3d0]">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gray-900 flex items-center justify-center text-white">
-                <Globe className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="font-black text-base text-[#3c2116]">
-                  GitHub & Vercel Deploy Hook
-                </h3>
-                <p className="text-xs text-[#765c50]">
-                  Gatilho de rebuild e deploy automático na nuvem
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={saveVercelIntegration}
-              disabled={savingKey === "vercel"}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gray-900 hover:bg-black text-white text-xs font-bold disabled:opacity-50"
-            >
-              <Save className="w-3.5 h-3.5" />
-              {savingKey === "vercel" ? "Salvando..." : "Salvar Vercel Hook"}
-            </button>
-          </div>
-
-          <div className="mt-5 space-y-4 max-w-2xl">
-            <div>
-              <label className="block text-xs font-bold text-[#3c2116] mb-1">
-                Vercel Deploy Hook URL (Opcional)
-              </label>
-              <input
-                type="url"
-                value={vercelDeployHook}
-                onChange={(e) => setVercelDeployHook(e.target.value)}
-                placeholder="https://api.vercel.com/v1/integrations/deploy/prj_.../..."
-                className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8d2bd] bg-[#fffdf9] text-xs font-mono focus:outline-black"
-              />
-              <span className="text-[11px] text-[#765c50] mt-1 block">
-                Permite que o painel envie um sinal para a Vercel reconstruir o site público instantaneamente após grandes mudanças no cardápio.
-              </span>
             </div>
           </div>
         </div>
